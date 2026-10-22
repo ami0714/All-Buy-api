@@ -31,7 +31,9 @@ class HitPayController extends Controller
         }
 
         try {
+            //logik untuk checkout
             $checkout = DB::transaction(function () use ($request, $validated): array {
+                //dapatkan data shipping dan courier
                 $shipping = DB::selectOne(
                     'SELECT c.id AS courier_id, sm.id AS shipping_method_id, sm.price
                     FROM couriers c
@@ -40,13 +42,13 @@ class HitPayController extends Controller
                         AND c.is_active = 1 AND sm.is_active = 1',
                     [$validated['courier_id'], $validated['shipping_method_id']]
                 );
-
+               //jika shipping kosong
                 if ($shipping === null) {
                     throw ValidationException::withMessages([
                         'shipping_method_id' => 'The selected active courier and shipping method do not match.',
                     ]);
                 }
-
+                //dapatkan address default  
                 $address = DB::selectOne(
                     'SELECT id, recipient_name, phone, address_line1, address_line2, city, state, postcode
                     FROM addresses
@@ -55,13 +57,13 @@ class HitPayController extends Controller
                     LIMIT 1',
                     [$request->user()->id]
                 );
-
+                    //jika ksoong
                 if ($address === null) {
                     throw ValidationException::withMessages([
                         'address' => 'Set a default delivery address before checking out.',
                     ]);
                 }
-
+                    //dapatkan data cart user
                 $cartItems = DB::select(
                     'SELECT
                         ci.variant_id,
@@ -79,22 +81,22 @@ class HitPayController extends Controller
                     ORDER BY ci.id',
                     [$request->user()->id]
                 );
-
+                //jika kosong
                 if ($cartItems === []) {
                     throw ValidationException::withMessages([
                         'cart' => 'Your cart is empty.',
                     ]);
                 }
-
+                //nilai awal untuk subtotal harga
                 $subtotalCents = 0;
-
+                    //guna foreach sebab item banyak so akan ulang ulang
                 foreach ($cartItems as $item) {
                     if (! $item->product_is_active || (int) $item->stock < (int) $item->quantity) {
                         throw ValidationException::withMessages([
                             'cart' => 'A cart item is inactive or has insufficient stock.',
                         ]);
                     }
-
+                        //masukkan kedalan subtotal dan jika sudah habis pusingan maka dapat total
                     $subtotalCents += $this->amountToCents($item->unit_price) * (int) $item->quantity;
                 }
 
@@ -110,7 +112,7 @@ class HitPayController extends Controller
                     'state' => $address->state,
                     'postcode' => $address->postcode,
                 ], JSON_THROW_ON_ERROR);
-
+                        //masukkan maklumat ke dapat order
                 DB::insert(
                     'INSERT INTO orders (
                         order_number, reference_no, user_id, address_id, address_snapshot,
@@ -129,17 +131,17 @@ class HitPayController extends Controller
                         'pending',
                     ]
                 );
-
+                        //dapatkan id order untuk order item
                 $order = DB::selectOne(
                     'SELECT id FROM orders WHERE order_number = ?',
                     [$orderNumber]
                 );
-
+                    //guna each untuk pengulangan
                 foreach ($cartItems as $item) {
                     $unitPriceCents = $this->amountToCents($item->unit_price);
                     $itemSubtotalCents = $unitPriceCents * (int) $item->quantity;
                     $variantInfo = trim(($item->size ?? '').' / '.($item->color ?? ''), ' /');
-
+                            //masukkan data dari cart ke dalam order item
                     DB::insert(
                         'INSERT INTO order_items (
                             order_id, variant_id, product_name_at_purchase, variant_info_at_purchase,
@@ -156,7 +158,7 @@ class HitPayController extends Controller
                         ]
                     );
                 }
-
+                    //dan masukkan data ke payment
                 DB::insert(
                     'INSERT INTO payments (order_id, gateway, reference_no, amount, status)
                     VALUES (?, ?, ?, ?, ?)',
@@ -168,12 +170,12 @@ class HitPayController extends Controller
                         'pending',
                     ]
                 );
-
+                    //dapatkan email user untuk payload hitpay
                 $user = DB::selectOne(
                     'SELECT email FROM users WHERE id = ?',
                     [$request->user()->id]
                 );
-
+                    //payload untuk hitpay
                 $paymentPayload = [
                     'amount' => $this->centsToAmount($totalCents),
                     'currency' => 'MYR',
@@ -187,7 +189,7 @@ class HitPayController extends Controller
                     && preg_match('/^\+[1-9]\d{1,14}$/', $address->phone) === 1) {
                     $paymentPayload['phone'] = $address->phone;
                 }
-
+                      // $checkout return array ni 
                 return [
                     'order_id' => $order->id,
                     'order_number' => $orderNumber,
@@ -223,6 +225,7 @@ class HitPayController extends Controller
                 ->timeout(30)
                 ->post(
                     rtrim((string) config('services.hitpay.api_url'), '/').'/v1/payment-requests',
+                    //payload dari $checkout yang mereturn array
                     $checkout['payload']
                 );
         } catch (ConnectionException $exception) {
@@ -234,11 +237,14 @@ class HitPayController extends Controller
                 'message' => 'Unable to connect to the payment service.',
             ], 502);
         }
-
+         //response dari hitpay
         $hitPayResponse = $response->json();
+        //dapatkan request Id darinhit pay
         $paymentRequestId = is_array($hitPayResponse) ? ($hitPayResponse['id'] ?? null) : null;
+        //dapatkan hitpay url
         $checkoutUrl = is_array($hitPayResponse) ? ($hitPayResponse['url'] ?? null) : null;
-
+       //jika tidak berjaya,$paymentRequestId bukan string,dan kosong,cek url jika tiada atau bukan string
+       // dan filter ,dan akan panggil fungsi jika gagal untuk update db
         if (! $response->successful()
             || ! is_string($paymentRequestId)
             || $paymentRequestId === ''
@@ -250,7 +256,7 @@ class HitPayController extends Controller
                 'response' => $hitPayResponse,
             ]);
             report(new \RuntimeException('HitPay did not return a valid payment request and checkout URL.'));
-
+             //respojse jika tidak berjaya
             return response()->json([
                 'status' => false,
                 'message' => 'Unable to create a payment session.',
@@ -282,7 +288,7 @@ class HitPayController extends Controller
                 'order_number' => $checkout['order_number'],
             ], 500);
         }
-
+      //response setelah berjaya dapatkan url
         return response()->json([
             'status' => true,
             'data' => [
@@ -295,13 +301,13 @@ class HitPayController extends Controller
             ],
         ], 201);
     }
-    //webhook jika berjaya atau gagal dan update order
+    //webhook jika berjaya atau gagal dan update order 
     public function webhook(Request $request): JsonResponse
     {
         $salt = config('services.hitpay.salt');
         $signature = $request->header('Hitpay-Signature');
         $rawPayload = $request->getContent();
-
+         //cek jika salt tu ada atau kosong
         if (! is_string($salt) || $salt === '') {
             report(new \RuntimeException('HitPay webhook salt is not configured.'));
 
@@ -310,7 +316,7 @@ class HitPayController extends Controller
                 'message' => 'Webhook verification is not configured.',
             ], 500);
         }
-
+           //cek
         $expectedSignature = hash_hmac('sha256', $rawPayload, $salt);
         if (! is_string($signature) || ! hash_equals($expectedSignature, $signature)) {
             return response()->json([
@@ -320,6 +326,7 @@ class HitPayController extends Controller
         }
 
         try {
+            //dapatkan payload yang di hantar dari hitpay ke webhook
             $payload = json_decode($rawPayload, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
             return response()->json([
@@ -327,23 +334,23 @@ class HitPayController extends Controller
                 'message' => 'Invalid webhook payload.',
             ], 400);
         }
-
+        //cek jika tiada
         if (! is_array($payload)) {
             return response()->json([
                 'status' => false,
                 'message' => 'Invalid webhook payload.',
             ], 400);
         }
-
+       //dapatkan event objet
         $eventObject = $request->header('Hitpay-Event-Object');
         if (is_string($eventObject) && $eventObject !== '' && $eventObject !== 'payment_request') {
             return response()->json(['status' => true, 'message' => 'Event ignored.']);
         }
-
+         //dapatkan data dari payload
         $paymentRequestId = $payload['id'] ?? null;
         $orderNumber = $payload['reference_number'] ?? null;
         $paymentStatus = $payload['status'] ?? null;
-
+            
         if (! is_string($paymentRequestId) || ! is_string($orderNumber)
             || ! in_array($paymentStatus, ['completed', 'failed'], true)
             || ! isset($payload['amount'], $payload['currency'])) {
@@ -354,12 +361,14 @@ class HitPayController extends Controller
         }
 
         try {
+            //proses jika betul
             $result = DB::transaction(function () use (
                 $payload,
                 $paymentRequestId,
                 $orderNumber,
                 $paymentStatus
             ): string {
+                //dapatkan data payment dan order
                 $payment = DB::selectOne(
                     'SELECT
                         p.id AS payment_id,
@@ -377,7 +386,7 @@ class HitPayController extends Controller
                     LIMIT 1',
                     ['hitpay', $paymentRequestId, $orderNumber]
                 );
-
+                    //jika tidak wujud
                 if ($payment === null) {
                     return 'not_found';
                 }
@@ -386,21 +395,23 @@ class HitPayController extends Controller
                     || strtoupper((string) $payload['currency']) !== strtoupper((string) $payment->currency)) {
                     return 'amount_mismatch';
                 }
-
+               //jika sudah dibayar
                 if ($payment->payment_status === 'paid') {
                     return 'already_processed';
                 }
-
+                   //tukarkan payload ke json
                 $rawResponse = json_encode($payload, JSON_THROW_ON_ERROR);
                   //handle update dan insert
+                  //jika payment status faild
                 if ($paymentStatus === 'failed') {
+                    //cek di db jika pending maka update jadi failed
                     if ($payment->payment_status === 'pending') {
                         DB::update(
                             'UPDATE payments SET status = ?, raw_response = ?
                             WHERE id = ? AND status = ?',
                             ['failed', $rawResponse, $payment->payment_id, 'pending']
                         );
-
+                        //dan masukkan ke dalam order history
                         DB::insert(
                             'INSERT INTO order_status_history (order_id, status, note)
                             VALUES (?, ?, ?)',
@@ -410,11 +421,11 @@ class HitPayController extends Controller
 
                     return 'failed';
                 }
-
+                     //jika bukan pending 
                 if ($payment->payment_status !== 'pending') {
                     return 'already_processed';
                 }
-
+                 //dapatkan data id variant dan quantity order
                 $orderItems = DB::select(
                     'SELECT variant_id, quantity
                     FROM order_items
@@ -429,16 +440,16 @@ class HitPayController extends Controller
                         WHERE id = ? AND stock >= ?',
                         [$item->quantity, $item->variant_id, $item->quantity]
                     );
-
+                    //jika bukan sama dengan 1 maka lempar error
                     if ($updatedStock !== 1) {
                         throw new \RuntimeException('Insufficient stock while completing a paid HitPay order.');
                     }
-
+                           //dapatkan data cart 
                     $cartItem = DB::selectOne(
                         'SELECT quantity FROM cart_items WHERE user_id = ? AND variant_id = ?',
                         [$payment->user_id, $item->variant_id]
                     );
-
+                      //jika cart tidak null dan quantity lebih besar dari quantity
                     if ($cartItem !== null && (int) $cartItem->quantity > (int) $item->quantity) {
                         DB::update(
                             'UPDATE cart_items
@@ -461,7 +472,7 @@ class HitPayController extends Controller
                     WHERE id = ? AND status = ?',
                     ['paid', $rawResponse, $payment->payment_id, 'pending']
                 );
-
+                  //update table order sebagai paid
                 DB::update(
                     'UPDATE orders SET status = ? WHERE id = ? AND status = ?',
                     ['paid', $payment->order_id, 'pending']
