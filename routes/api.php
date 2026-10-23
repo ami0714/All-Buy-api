@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HitPayController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
@@ -19,6 +20,9 @@ Route::post('/hitpay/webhook', [HitPayController::class, 'webhook']);
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
+Route::get('/admin/dashboard/stats', [DashboardController::class, 'getAdminState']);
+Route::get('/admin/dashboard/chart', [DashboardController::class, 'getChartData']);
+Route::get('/admin/dashboard/status', [DashboardController::class, 'getOrderStatus']);
 Route::get('/user',[UserController::class, 'getUser']);
 Route::patch('/user',[UserController::class, 'editUser']);
 
