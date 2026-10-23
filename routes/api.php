@@ -6,6 +6,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\HitPayController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ShippingController;
 
@@ -30,5 +31,6 @@ Route::get('/user/cart', [CartController::class, 'getUserCart']);
 Route::delete('/user/cart/{cartId}', [CartController::class, 'deleteItemCart']);
 Route::patch('/user/cart/{cartId}', [CartController::class, 'changeQuantity']);
 Route::post('/user/payment/hitpay', [HitPayController::class, 'createPayment']);
+Route::get('/user/orders', [OrderController::class, 'getAllUserOrder']);
 
 });
