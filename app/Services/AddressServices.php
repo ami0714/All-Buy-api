@@ -2,9 +2,7 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
-use JsonException;
 
 class AddressServices
 {
@@ -33,9 +31,9 @@ class AddressServices
         });
     }
 
-    public function editAddress($userId, $addressId, $label, $recipientName, $phone, $addressLine1, $addressLine2, $city, $state, $postcode, $isDefault): bool
+    public function editAddress(int $userId, int $addressId, array $attributes): bool
     {
-        return DB::transaction(function () use ($userId, $addressId, $label, $recipientName, $phone, $addressLine1, $addressLine2, $city, $state, $postcode, $isDefault): bool {
+        return DB::transaction(function () use ($userId, $addressId, $attributes): bool {
             $address = DB::selectOne(
                 'SELECT id FROM addresses WHERE user_id = ? AND id = ?',
                 [$userId, $addressId]
@@ -45,16 +43,44 @@ class AddressServices
                 return false;
             }
 
-            if ($isDefault == true) {
+            if ((bool) ($attributes['is_default'] ?? false)) {
                 DB::update(
                     'UPDATE addresses SET is_default = 0 WHERE user_id = ? AND id != ? AND is_default = 1',
                     [$userId, $addressId]
                 );
             }
 
+            $fieldMap = [
+                'label' => 'label',
+                'recipient_name' => 'recipient_name',
+                'phone' => 'phone',
+                'address_line1' => 'address_line1',
+                'address_line2' => 'address_line2',
+                'city' => 'city',
+                'state' => 'state',
+                'postcode' => 'postcode',
+                'is_default' => 'is_default',
+            ];
+            $setClauses = [];
+            $bindings = [];
+
+            foreach ($fieldMap as $input => $column) {
+                if (! array_key_exists($input, $attributes)) {
+                    continue;
+                }
+
+                $setClauses[] = "{$column} = ?";
+                $bindings[] = $input === 'is_default'
+                    ? (int) $attributes[$input]
+                    : $attributes[$input];
+            }
+
+            $bindings[] = $userId;
+            $bindings[] = $addressId;
+
             DB::update(
-                'UPDATE addresses SET label = ?, recipient_name = ?, phone = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, postcode = ?, is_default = ? WHERE user_id = ? AND id = ?',
-                [$label, $recipientName, $phone, $addressLine1, $addressLine2, $city, $state, $postcode, (bool) $isDefault, $userId, $addressId]
+                'UPDATE addresses SET '.implode(', ', $setClauses).' WHERE user_id = ? AND id = ?',
+                $bindings
             );
 
             return true;

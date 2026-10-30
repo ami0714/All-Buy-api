@@ -187,4 +187,50 @@ class DashboardController extends Controller
 
 
     }
+
+
+    public function getRecentOrder(Request $request) :JsonResponse{
+      
+    if ($request->user()?->role !== 'admin') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Forbidden.',
+            ], 403);
+        }
+
+        try {
+              
+          $RecentOrder = DB::select('SELECT
+                            o.id,
+                            o.order_number,
+                            u.username,
+                            u.email,
+                            o.order_date,
+                            o.total_amount,
+                            o.status
+                            FROM orders o
+                            JOIN users u ON o.user_id = u.id
+                            ORDER BY o.order_date DESC
+                            LIMIT 10
+                            ');
+          
+               return response()->json([
+                'status' => true,
+                'data' => $RecentOrder,
+            ]);
+
+        } catch (Throwable $exception) {
+             report($exception);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to retrieve order data.',
+            ], 500);
+        }
+    
+
+
+
+
+    }
 }

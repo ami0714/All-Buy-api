@@ -65,33 +65,53 @@ public function __construct(protected AddressServices $addressServices )
       ], 500);
     }
 
-    public function editAddress(Request $request, $addressId) :JsonResponse{
+    public function editAddress(Request $request, int $addressId): JsonResponse
+    {
+      $validated = $request->validate([
+        'label' => ['sometimes', 'required', 'string', 'max:50'],
+        'recipient_name' => ['sometimes', 'required', 'string', 'max:100'],
+        'phone' => ['sometimes', 'required', 'string', 'max:20'],
+        'address_line1' => ['sometimes', 'required', 'string', 'max:255'],
+        'address_line2' => ['sometimes', 'nullable', 'string', 'max:255'],
+        'city' => ['sometimes', 'required', 'string', 'max:100'],
+        'state' => ['sometimes', 'required', 'string', 'max:100'],
+        'postcode' => ['sometimes', 'required', 'string', 'max:10'],
+        'is_default' => ['sometimes', 'required', 'boolean'],
+      ]);
 
-      $userId = request()->user()->id;
-        
-         $insertData = $this->addressServices->editAddress($userId,
-         $addressId,
-         $request->input('label')
-         ,$request->input('recipient_name')
-         ,$request->input('phone')
-         ,$request->input('address_line1')
-         ,$request->input('address_line2')
-         ,$request->input('city')
-         ,$request->input('state')
-         ,$request->input('postcode')
-         ,$request->input('is_default'));
+      if ($validated === []) {
+        return response()->json([
+          'status' => false,
+          'message' => 'At least one address field is required.',
+        ], 422);
+      }
 
-         if($insertData){
-            return response()->json([
-        'status' => true,
-        'message' => 'berjaya edit data',
-      ], 200);
-         }
+      try {
+        $updated = $this->addressServices->editAddress(
+          $request->user()->id,
+          $addressId,
+          $validated
+        );
 
-         return response()->json([
-        'status' => false,
-        'message' => 'err edit alamat',
-      ], 500);
+        if (! $updated) {
+          return response()->json([
+            'status' => false,
+            'message' => 'Address not found.',
+          ], 404);
+        }
+
+        return response()->json([
+          'status' => true,
+          'message' => 'Address updated successfully.',
+        ]);
+      } catch (\Throwable $exception) {
+        report($exception);
+
+        return response()->json([
+          'status' => false,
+          'message' => 'Unable to update address.',
+        ], 500);
+      }
     }
 
 

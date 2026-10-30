@@ -41,19 +41,23 @@ class UserController extends Controller
             ], 422);
         }
 
-        $updates = [];
+        $setClauses = [];
         $bindings = [];
-        //cek adakah field ade ke tak jika ada maka akan masuk dalam update dan binding 
+
         foreach (['username', 'email', 'phone'] as $column) {
             if (array_key_exists($column, $validated)) {
-                $updates[] = $column.' = ?';
+                $setClauses[] = $column.' = ?';
                 $bindings[] = $validated[$column];
             }
         }
 
-        $updates[] = 'updated_at = CURRENT_TIMESTAMP';
+        $setClauses[] = 'updated_at = CURRENT_TIMESTAMP';
         $bindings[] = $userId;
-        DB::update('UPDATE users SET '.implode(', ', $updates).' WHERE id = ?', $bindings);
+
+        DB::update(
+            'UPDATE users SET '.implode(', ', $setClauses).' WHERE id = ?',
+            $bindings
+        );
 
         return response()->json([
             'status' => true,

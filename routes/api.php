@@ -10,6 +10,8 @@ use App\Http\Controllers\HitPayController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ShippingController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\VariantController;
 
 require __DIR__.'/auth.php';
 
@@ -23,6 +25,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::get('/admin/dashboard/stats', [DashboardController::class, 'getAdminState']);
 Route::get('/admin/dashboard/chart', [DashboardController::class, 'getChartData']);
 Route::get('/admin/dashboard/status', [DashboardController::class, 'getOrderStatus']);
+Route::get('/admin/dashboard/recent-order',[DashboardController::class,'getRecentOrder']);
+Route::get('/admin/category',[CategoryController::class,'getCategory']);
+Route::get('/admin/products', [ProductController::class, 'getAllProductList']);
+Route::get('/admin/products/{product_id}', [ProductController::class, 'getAdminProductDetail']);
+Route::post('/admin/products', [ProductController::class, 'addProduct']);
+Route::patch('/admin/products/{product_id}', [ProductController::class, 'updateProductDetail']);
+Route::patch('/admin/products/{product_id}/status', [ProductController::class, 'changeStatusProduct']);
+
+Route::get('/admin/products/{product_id}/variants', [VariantController::class, 'getVariantsById']);
+
+
 Route::get('/user',[UserController::class, 'getUser']);
 Route::patch('/user',[UserController::class, 'editUser']);
 
