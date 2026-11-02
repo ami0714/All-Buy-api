@@ -34,7 +34,8 @@ Route::patch('/admin/products/{product_id}', [ProductController::class, 'updateP
 Route::patch('/admin/products/{product_id}/status', [ProductController::class, 'changeStatusProduct']);
 
 Route::get('/admin/products/{product_id}/variants', [VariantController::class, 'getVariantsById']);
-
+Route::patch('/admin/products/variants/{variant_id}', [VariantController::class, 'updateVariant']);
+Route::post('/admin/products/{product_id}/variants', [VariantController::class, 'addVariant']);
 
 Route::get('/user',[UserController::class, 'getUser']);
 Route::patch('/user',[UserController::class, 'editUser']);
@@ -49,5 +50,5 @@ Route::delete('/user/cart/{cartId}', [CartController::class, 'deleteItemCart']);
 Route::patch('/user/cart/{cartId}', [CartController::class, 'changeQuantity']);
 Route::post('/user/payment/hitpay', [HitPayController::class, 'createPayment']);
 Route::get('/user/orders', [OrderController::class, 'getAllUserOrder']);
-
+Route::get('/user/orders/{orderId}', [OrderController::class, 'getUserOrderDetail']);
 });
