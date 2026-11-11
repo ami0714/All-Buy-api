@@ -1,47 +1,28 @@
-FROM php:8.3-apache
+FROM php:8.4-cli-alpine
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libcurl4-openssl-dev \
-        libicu-dev \
-        libonig-dev \
-        libzip-dev \
-    && docker-php-ext-install -j"$(nproc)" \
-        bcmath \
-        curl \
-        intl \
-        mbstring \
-        opcache \
-        pdo_mysql \
-        zip \
-    && a2enmod rewrite \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    libwebp-dev \
+    freetype-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    git \
+    bash \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install pdo pdo_mysql zip gd
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-WORKDIR /var/www/html
+WORKDIR /app
+COPY . /app
 
-COPY . .
-COPY docker/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
-COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint
+RUN composer install --no-dev --optimize-autoloader
+RUN chmod -R 777 storage bootstrap/cache
 
-RUN mkdir -p \
-        bootstrap/cache \
-        storage/framework/cache/data \
-        storage/framework/sessions \
-        storage/framework/views \
-        storage/logs \
-    && composer install \
-        --no-dev \
-        --no-interaction \
-        --no-progress \
-        --prefer-dist \
-        --optimize-autoloader \
-    && chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R ug+rwX storage bootstrap/cache \
-    && chmod +x /usr/local/bin/docker-entrypoint
+EXPOSE 8080
 
-EXPOSE 10000
-
-ENTRYPOINT ["docker-entrypoint"]
-CMD ["apache2-foreground"]
+# Jalankan server
+# Tukar baris CMD asal kepada ini:
+CMD  php artisan serve --host=0.0.0.0 --port=8080
